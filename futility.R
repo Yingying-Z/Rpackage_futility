@@ -586,6 +586,8 @@ FillinInterimdata.byArm <-
 #' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
 #' \item \code{eventPostRate}: a numeric vector of length \code{nTrials} of the sampled treatment arm-pooled posterior \emph{annual} event rates
 #' }
+#' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean
+#' \item \code{TkOverTstar}: the ratio of observed person-time at risk to the estimated total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
 #' }
 #'
@@ -748,6 +750,7 @@ completeTrial.pooledArms <-
                    eventPostRate=eventPostRate*52 #annual event rates
       ),
       BetaOverBetaPlusTk = beta/(beta+T_k),
+      TkOverTstar = T_k/T_star,
       randomSeed = randomSeed
     )
 
@@ -799,6 +802,8 @@ completeTrial.pooledArms <-
 #' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
 #' \item \code{eventPostRate}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is a numeric vector of length \code{nTrials} of the sampled treatment arm-specific posterior \emph{annual} event rates
 #' }
+#' \item \code{BetaOverBetaPlusTk}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific weight placed on the prior mean
+#' \item \code{TkOverTstar}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific ratio of observed person-time at risk to the estimated total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
 #' }
 #'
@@ -984,6 +989,7 @@ completeTrial.byArm <-
                    eventPostRate=list(eventPostRate[[1]]*52,eventPostRate[[2]]*52,eventPostRate[[3]]*52) #annual event rates
                    ),
       BetaOverBetaPlusTk = beta/(beta+T_k),
+      TkOverTstar = T_k/T_star,
       randomSeed = randomSeed
     )
 
