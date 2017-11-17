@@ -586,8 +586,8 @@ FillinInterimdata.byArm <-
 #' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
 #' \item \code{eventPostRate}: a numeric vector of length \code{nTrials} of the sampled treatment arm-pooled posterior \emph{annual} event rates
 #' }
-#' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean
-#' \item \code{TkOverTstar}: the ratio of observed person-time at risk to the estimated total person-time at risk
+#' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean event rate
+#' \item \code{TkOverTstar}: the ratio of the observed person-time at risk to the estimated total person-time at risk, with the event rate set equal to \code{eventPriorRate} in the estimator for the total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
 #' }
 #'
@@ -802,8 +802,8 @@ completeTrial.pooledArms <-
 #' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
 #' \item \code{eventPostRate}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is a numeric vector of length \code{nTrials} of the sampled treatment arm-specific posterior \emph{annual} event rates
 #' }
-#' \item \code{BetaOverBetaPlusTk}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific weight placed on the prior mean
-#' \item \code{TkOverTstar}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific ratio of observed person-time at risk to the estimated total person-time at risk
+#' \item \code{BetaOverBetaPlusTk}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific weight placed on the prior mean event rate
+#' \item \code{TkOverTstar}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the ratio of the observed arm-specific person-time at risk to the estimated total arm-specific person-time at risk, with the arm-specific event rates set equal to the components of \code{eventPriorRate} in the estimator for the total arm-specific person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
 #' }
 #'
