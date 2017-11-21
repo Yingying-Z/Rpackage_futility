@@ -546,6 +546,7 @@ FillinInterimdata.byArm <-
 #' @param eventPriorRate a numeric value of a treatment arm-pooled prior mean incidence rate for the endpoint, expressed as the number of events per person-year at risk. If \code{NULL} (default), then use the observed rate in \code{interimData}.
 #' @param missVaccProb a probability of being excluded from the per-protocol cohort. If \code{NULL} (default), no per-protocol indicator is generated; if specified, the indicator is sampled from the Bernoulli distribution with probability \code{missVaccProb}.
 #' @param fuTime a follow-up time (in weeks) of each participant
+#' @param fixedDropOutRate the pre-trial assumed annual drop-out rate. If \code{NULL} (default), the observed drop-out rate is used
 #' @param MIXTURE a logical value indicating whether to call the robust mixture approach. If equal to \code{FALSE} (default), then \code{mix.weights} and \code{eventPriorWeightRobust} are ignored.
 #' @param mix.weights a vector of lenght 2 to indicate the weights of the informative part and of the uniformative part. The elements should sum to 1. If \code{NULL} (default), 0.80/0.20 is used.
 #' @param eventPriorWeightRobust a numeric value of the robust event prior weight. If \code{NULL} (default), 1/200 is used.
@@ -627,6 +628,9 @@ completeTrial.pooledArms <-
     # if eventPriorRate=NULL, then use observed event rate
     eventPriorRate = NULL,
 
+    # pre-trial assumptions on annual drop-out rate. If NULL, the observed drop-out rate is used.
+    fixedDropOutRate=NULL,
+
     #used to create "per-protocol" indicators
     #If specified, indicator for belonging to a per-protocol cohort is created
     missVaccProb = NULL,
@@ -695,7 +699,11 @@ completeTrial.pooledArms <-
 
     #Estimation of Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    d_star <- dropRate
+    if(is.null(fixedDropOutRate)){
+      d_star=dropRate
+    }else{
+      d_star=fixedDropOutRate/52
+    }
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
     ## if MIXTURE==TRUE then alpha and beta should become vectors
@@ -831,6 +839,7 @@ completeTrial.pooledArms <-
 #' @param enrollRatePeriod the length (in weeks) of the time period preceding the time of the last enrolled participant in \code{interimData} that the average weekly enrollment rate will be based on and used for completing enrollment. If \code{NULL} (default), then \code{enrollRate} must be specified.
 #' @param eventPriorWeight a numeric value in \eqn{[0,1]} representing a weight assigned to the prior gamma distribution of the treatment arm-specific event rates at the time when 50\% of the estimated person-time at risk in each arm has been accumulated (see the vignette)
 #' @param eventPriorRate a numeric vector of treatment arm-specific prior mean incidence rates for the endpoint, expressed as numbers of events per person-year at risk, with the arms in the same order as in \code{trtNames}
+#' @param fixedDropOutRate the pre-trial assumed annual drop-out rate. If \code{NULL} (default), the observed drop-out rate is used
 #' @param missVaccProb a probability of being excluded from the per-protocol cohort. If \code{NULL} (default), no per-protocol indicator is generated; if specified, the indicator is sampled from the Bernoulli distribution with probability \code{missVaccProb}.
 #' @param fuTime a follow-up time (in weeks) of each participant
 #' @param visitSchedule a numeric vector of visit weeks at which testing for the endpoint is conducted
@@ -911,6 +920,9 @@ completeTrial.byArm <-
     # eventPriorRate can not be null
     eventPriorRate ,
 
+    # pre-trial assumptions on annual drop-out rate. If NULL, the observed drop-out rate is used.
+    fixedDropOutRate=NULL,
+
     #used to create "per-protocol" indicators
     #If specified, indicator for belonging to a per-protocol cohort is created
     missVaccProb = NULL,
@@ -976,7 +988,11 @@ completeTrial.byArm <-
 
     #Estimation of Arm Specific Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    d_star=0.1/52
+    if(is.null(fixedDropOutRate)){
+      d_star=dropRate
+    }else{
+      d_star=fixedDropOutRate/52
+    }
 
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
