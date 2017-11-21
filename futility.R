@@ -45,9 +45,8 @@ getVisitWeek <- function( week, visitWeeks, whichVisit=c("next","previous"))
   return(week)
 }
 
-
 FillinInterimdata.Pooled <-
-  function(interimData, rates, visitSchedule, visitSchedule2 = NULL, Nppt , FLAG, fuTime, Seed = NULL)
+  function(interimData, rates, visitSchedule, visitSchedule2 = NULL, Nppt, fuTime, Seed = NULL)
   {
     
     ## Finish enrollment and get enrollment times
@@ -162,20 +161,12 @@ FillinInterimdata.Pooled <-
     #we need to generate a dropout time and a Time-to-Event
     #because exponetial distribution is memoryless, the times are generated with same weekly rates
     Nfollowup<-sum(is.na(interimData$exit))
-    
-    #look for correction flag
-    if(!FLAG){
-      warning("fuTime set to uncorrected follow-up time")
-      fuTime2 <- fuTime
-    }else{
-      tFU<-ifelse(interimData$followup==1,interimData$last_visit_dt-interimData$entry,interimData$exit-interimData$entry)
-      #followup time for subjects in follow-up
-      adj.fUP <- tFU[interimData$followup==1]
+
+    tFU<-ifelse(interimData$followup==1,interimData$last_visit_dt-interimData$entry,interimData$exit-interimData$entry)
+    #followup time for subjects in follow-up
+    adj.fUP <- tFU[interimData$followup==1]
+    fuTime2 <- fuTime-adj.fUP
       
-      
-      fuTime2 <- fuTime-adj.fUP
-    }    
-    
     ####################################
     #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up. 
     ####################################
@@ -272,11 +263,8 @@ FillinInterimdata.Pooled <-
     #Change exit from reference time being the end of observed follow-up time to each subject in follow-up back to orignial timeline.
     ####################################
     #interimData.filled$exit[is.na(interimData$exit)]<-exit
-    if(!FLAG){
-      interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+exit
-    }else{
-      interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
-    }
+    interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
+    
     #sanity check
     summary(interimData.filled$exit[is.na(interimData$exit)]-interimData.filled$entry[is.na(interimData$exit)])
     
@@ -288,7 +276,7 @@ FillinInterimdata.Pooled <-
 
 
 FillinInterimdata.byArm <-
-  function(interimData, rates, visitSchedule, visitSchedule2 = NULL, trtNames, N, FLAG, fuTime, Seed = NULL)
+  function(interimData, rates, visitSchedule, visitSchedule2 = NULL, trtNames, N, fuTime, Seed = NULL)
   {
     nArms <- length(N)
     ## Finish enroll by arm and get enrollment times
@@ -424,18 +412,10 @@ FillinInterimdata.byArm <-
       Nfollowup<-c(Nfollowup,sum(is.na(interimData$exit[interimData$arm==trtNames[j]])))
     }
     
-    #look for correction flag
-    if(!FLAG){
-      warning("fuTime set to uncorrected follow-up time")
-      fuTime2 <- fuTime
-    }else{
-      tFU<-ifelse(interimData$followup==1,interimData$last_visit_dt-interimData$entry,interimData$exit-interimData$entry)
-      #followup time for subjects in follow-up
-      adj.fUP <- tFU[interimData$followup==1]
-      
-      
-      fuTime2 <- fuTime-adj.fUP
-    }    
+    tFU<-ifelse(interimData$followup==1,interimData$last_visit_dt-interimData$entry,interimData$exit-interimData$entry)
+    #followup time for subjects in follow-up
+    adj.fUP <- tFU[interimData$followup==1]
+    fuTime2 <- fuTime-adj.fUP
     
     ####################################
     #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up. 
@@ -541,11 +521,8 @@ FillinInterimdata.byArm <-
     #Change exit from reference time being the end of observed follow-up time to each subject in follow-up back to orignial timeline.
     ####################################
     #interimData.filled$exit[is.na(interimData$exit)]<-exit
-    if(!FLAG){
-      interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+exit
-    }else{
-      interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
-    }
+    interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
+    
     #sanity check
     summary(interimData.filled$exit[is.na(interimData$exit)]-interimData.filled$entry[is.na(interimData$exit)])
     
@@ -569,6 +546,9 @@ FillinInterimdata.byArm <-
 #' @param eventPriorRate a numeric value of a treatment arm-pooled prior mean incidence rate for the endpoint, expressed as the number of events per person-year at risk. If \code{NULL} (default), then use the observed rate in \code{interimData}.
 #' @param missVaccProb a probability of being excluded from the per-protocol cohort. If \code{NULL} (default), no per-protocol indicator is generated; if specified, the indicator is sampled from the Bernoulli distribution with probability \code{missVaccProb}.
 #' @param fuTime a follow-up time (in weeks) of each participant
+#' @param MIXTURE a logical value indicating whether to call the robust mixture approach. If equal to \code{FALSE} (default), then \code{mix.weights} and \code{eventPriorWeightRobust} are ignored.
+#' @param mix.weights a vector of lenght 2 to indicate the weights of the informative part and of the uniformative part. The elements should sum to 1. If \code{NULL} (default), 0.80/0.20 is used.
+#' @param eventPriorWeightRobust a numeric value of the robust event prior weight. If \code{NULL} (default), 1/200 is used.
 #' @param visitSchedule a numeric vector of visit weeks at which testing for the endpoint is conducted
 #' @param visitSchedule2 a numeric vector of visit weeks at which testing for the endpoint is conducted in a subset of participants (e.g., those who discontinue administration of the study product but remain in follow-up). If \code{NULL} (default), everyone is assumed to follow \code{visitSchedule}.
 #' @param saveFile a character string specifying an \code{.RData} file storing the output list. If \code{NULL} and \code{saveDir} is specified, the file name will be generated. If, in turn, \code{saveFile} is specified but \code{saveDir} equals \code{NULL}, then \code{saveFile} is ignored, and the output list will be returned.
@@ -589,6 +569,7 @@ FillinInterimdata.byArm <-
 #' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean event rate
 #' \item \code{TkOverTstar}: the ratio of the observed person-time at risk to the estimated total person-time at risk, with the event rate set equal to \code{eventPriorRate} in the estimator for the total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
+#' \item \code{w.post}: the mixture posterior weights. if \code{MIXTURE} equal to \code{FALSE}, then \code{w.post} equal to \code{NA}
 #' }
 #'
 #' @examples
@@ -641,6 +622,7 @@ completeTrial.pooledArms <-
 
     # the weight for event rate Prior
     eventPriorWeight,
+
     # pre-trial assumed event rate, needs to be in unit of # per person-year
     # if eventPriorRate=NULL, then use observed event rate
     eventPriorRate = NULL,
@@ -650,6 +632,17 @@ completeTrial.pooledArms <-
     missVaccProb = NULL,
 
     fuTime,
+
+    # this is a dummy variable to call the robust mixture approach
+    MIXTURE=FALSE,
+   
+    # this is a vector of lenght 2 to indicate the weights of the 
+    # informative part and of the uniformative part (default is 0.80/0.20).
+    # the elements should sum to 1.
+    mix.weights=NULL,
+
+    # the robust / non-informative parts is specified via a weight
+    eventPriorWeightRobust=NULL,
 
     #Schedule 1-Procedures at CRS for event-free participants
     visitSchedule,
@@ -700,24 +693,79 @@ completeTrial.pooledArms <-
       eventPriorRate<-eventPriorRate/52
     }
 
-    T_star<-N*(1-exp(-(dropRate+eventPriorRate)*fuTime))/(dropRate+eventPriorRate)
+    #Estimation of Total Person-Weeks at Risk (T_star)
+    #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
+    d_star <- dropRate
+    T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
+    ## if MIXTURE==TRUE then alpha and beta should become vectors
+    ## furthermore the weights need to be updated as well.
+    
+    if(MIXTURE){
+        if(is.null(eventPriorWeightRobust)){
+            warning("robust prior set to w = 1/200")
+            eventPriorWeight <- c(eventPriorWeight, 1/200)
+        }else{
+         eventPriorWeight <- c(eventPriorWeight,eventPriorWeightRobust) 
+        }
+    }        
+        
+    ## if MIXTURE=FALSE than these remain scalars
+    ## because the two gamma have the same expected value, eventPriorRate can be used    
+    ## if 
     beta<-T_star*eventPriorWeight/(2*(1-eventPriorWeight))
     alpha<-beta*eventPriorRate
 
+    
     ## create lists for storage of trial data
     trialList  <- vector("list", nTrials)
 
     #record the weekly event rates
     eventPostRate    <- rep(NA,nTrials)
+    
+    ## core of the mixture part
+    if(MIXTURE){
+        # verify that two weights are specified
+        if(is.null(mix.weights)) {
+            # first element is assigned a weight of 0.8
+            warning("mixing weights not specified, set to c(0.8,0.2)")
+            mix.weights=c(0.8,0.2)
+        }
+        if(length(mix.weights)!=2){
+            warning("mixing weights not specified, set to c(0.8,0.2)")
+            mix.weights=c(0.8,0.2)
+        }
+
+        # determine how likely the informative and uninformative part are
+        # via the marginal likelihoods
+        marg_lik <- numeric(2)
+        marg_lik[1] <- dgamma(n_k/T_k, alpha[1]+n_k, beta[1]+T_k)
+        marg_lik[2] <- dgamma(n_k/T_k, alpha[2]+n_k, beta[2]+T_k)
+        # posterior weights
+        w_post <- marg_lik * mix.weights / sum(marg_lik *mix.weights)
+    }
 
     for ( i in 1:nTrials )
     {
       if ( !is.null(randomSeed) ) set.seed( randomSeed+i )
       #weekly event rate
       #event rate=rgamma( 1,  alpha + n_Events,  beta + totFU_for_event)
-      eventRate=rgamma( 1,  alpha + n_k,  beta+T_k)
-
+      if(MIXTURE){
+           ## simple sampling from the mixture distribution
+          ## sample runif from 0-1; if smaller than max-weight -> sample from dist. 
+          ## with max weight otherwise sample from the other distribution.
+          tmp <- runif(1, min=0, max=1)
+          IDX <- which(w_post==max(w_post)) 
+          if(tmp < max(w_post)) {
+            eventRate <- rgamma(1, alpha[IDX]+n_k, beta[IDX]+T_k)
+          }else{
+              #IDX <- which(w_post!=max(w_post)) 
+            eventRate <- rgamma(1, alpha[-IDX]+n_k, beta[-IDX]+T_k)
+          }
+      }else{
+          eventRate=rgamma( 1,  alpha + n_k,  beta+T_k)
+      }
+  
       ## 'parSet' contains weekly rates
       rates <- list(enrollmentRate=enrollmentRate, eventRate=eventRate, dropRate=dropRate)
 
@@ -725,8 +773,7 @@ completeTrial.pooledArms <-
       out <- FillinInterimdata.Pooled(interimData=interimData, rates = rates,
                                       visitSchedule = visitSchedule,
                                       visitSchedule2 = visitSchedule2,
-                                      Nppt = Nppt, FLAG=TRUE,
-                                      fuTime = fuTime,Seed = randomSeed+i)
+                                      Nppt = Nppt, fuTime = fuTime,Seed = randomSeed+i)
 
       if ( !is.null(missVaccProb) ) {
         # create a set of indicators of belonging to a per-protocol cohort
@@ -751,7 +798,8 @@ completeTrial.pooledArms <-
       ),
       BetaOverBetaPlusTk = beta/(beta+T_k),
       TkOverTstar = T_k/T_star,
-      randomSeed = randomSeed
+      randomSeed = randomSeed,
+       w.post=ifelse(MIXTURE, w_post, NA)
     )
 
     # save trial output and information on used rates
@@ -963,7 +1011,7 @@ completeTrial.byArm <-
       out <- FillinInterimdata.byArm(interimData=interimData, rates = rates,
                                      visitSchedule = visitSchedule,
                                      visitSchedule2 = visitSchedule2,
-                                     trtNames=trtNames, N = N, FLAG=TRUE,
+                                     trtNames=trtNames, N = N,
                                      fuTime = fuTime, Seed = randomSeed+i)
 
       if ( !is.null(missVaccProb) ) {
