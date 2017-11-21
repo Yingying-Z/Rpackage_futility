@@ -699,11 +699,10 @@ completeTrial.pooledArms <-
 
     #Estimation of Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    if(is.null(fixedDropOutRate)){
-      d_star=dropRate
-    }else{
-      d_star=fixedDropOutRate/52
+    if(!is.null(fixedDropOutRate)){
+      dropRate<-fixedDropOutRate/52
     }
+    d_star<-dropRate
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
     ## if MIXTURE==TRUE then alpha and beta should become vectors
@@ -807,7 +806,7 @@ completeTrial.pooledArms <-
       BetaOverBetaPlusTk = beta/(beta+T_k),
       TkOverTstar = T_k/T_star,
       randomSeed = randomSeed,
-       w.post=ifelse(MIXTURE, w_post, NA)
+      w.post=ifelse(MIXTURE, w_post, NA)
     )
 
     # save trial output and information on used rates
@@ -988,12 +987,10 @@ completeTrial.byArm <-
 
     #Estimation of Arm Specific Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    if(is.null(fixedDropOutRate)){
-      d_star=dropRate
-    }else{
-      d_star=fixedDropOutRate/52
+    if(!is.null(fixedDropOutRate)){
+      dropRate<-fixedDropOutRate/52
     }
-
+    d_star<-dropRate
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
     beta<-T_star*eventPriorWeight/(2*(1-eventPriorWeight))
