@@ -48,10 +48,10 @@ getVisitWeek <- function( week, visitWeeks, whichVisit=c("next","previous"))
 FillinInterimdata.Pooled <-
   function(interimData, rates, visitSchedule, visitSchedule2 = NULL, Nppt, fuTime, Seed = NULL)
   {
-    
+
     ## Finish enrollment and get enrollment times
     Nenroll<-Nppt-nrow(interimData)
-    
+
     #Keep recruiting week by week untill Nenroll participants have been recruited
     ii<-0
     Nenrolled<-0
@@ -64,20 +64,20 @@ FillinInterimdata.Pooled <-
       Nenrolled<-Nenrolled+N.thisweek
       if ( Nenrolled >= Nenroll ) break
     }
-    
+
     #restrict to the first nEnroll enrollees
     enr<-enr[1:Nenroll]
-    
+
     ## generate dropout times for the Nenroll participants from an exponential distribution
     if ( !is.null(Seed) ) set.seed( Seed )
     dropout <- rexp(Nenroll, rates$dropRate)
-    
+
     ## generate Time-to-Event for the Nenroll participants
     #here we can't use the same Seed as dropout because when rates$dropRate<rates$eventRate,
     #the same seed will always generate dropout>event.
     if ( !is.null(Seed) ) set.seed( Seed+1000 )
     event.time <- rexp(Nenroll, rates$eventRate)
-    
+
     ## censor the Dropout Time  and Time-to-Event based on fuTime
     ##-----------------------------------------------------------
     ## we let the support of dropout being [0, fuTime)
@@ -87,77 +87,77 @@ FillinInterimdata.Pooled <-
     ##-----------------------------------------------------------
     dropout[dropout >= fuTime] <- NA
     event.time[event.time >= fuTime] <- NA
-    
+
     ## Censor events that occur after dropout, as they can't be observed
     event.time[ is.TRUE( event.time > dropout ) ] <- NA
-    
-    
+
+
     ## *** NOTE  ****************************************************
     ##  We still have records with both Dropout Time and Time-to-Event for those with dropout > event
     ##  We need to keep both times until we calculate the "DX time" for the events,
     ##  then we can compare dropout to the DX time and keep the earlier of the two.
     ## **************************************************************
-    
-    
+
+
     ## ---------------------------------------------------------------------- ##
     ## Now, we start to construct the "observed" data, by applying the        ##
     ## study visit Map (Schedule 1 and Schedule 4) to the simulated data.     ##
     ## This will allow us to figure out when: (a) the events are diagnosed##
     ## (b) the last visit occurred (during the simulated period).             ##
     ## ---------------------------------------------------------------------- ##
-    
+
     ## create observed data object to fill in
     obsEDI <- data.frame( enrollTime = enr,
                           dropTime = dropout,
                           eventDXTime = NA
     )
-    
+
     ## get event diagnosis dates for each non-NA Time-to-Event
-    
+
     ## Do the following only if there's at least one event
     if ( !all( is.na(event.time) ) )
     {
       #for simulated newly enrolled subjects, everyone is in visitShcedule1
       eventDX <- getVisitWeek( week=event.time, visitWeeks=visitSchedule, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime <- pmin( eventDX, dropout, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX[ is.TRUE(eventDX > minTime) ] <- NA
       dropout[ is.TRUE(dropout > minTime) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime <- eventDX
       obsEDI$dropTime <- dropout
     }
-    
+
     ## we compute the amount of "follow-up time"  for each
     ## ppt.  This is equal to the 'fuTime' for ppt.s without events,
     ## and equal to the event time for participants with events.
     obsEDI$futime <- pmin( obsEDI$eventDXTime,
                            obsEDI$dropTime, fuTime, na.rm=TRUE)
-    
+
     exit  <- obsEDI$enrollTime + obsEDI$futime
-    
+
     ## create flag for event
     event <- !is.na(obsEDI$eventDXTime)
     droppedout<- !is.na(obsEDI$dropTime)
-    
+
     out <- data.frame(
       entry = enr,
       exit  = exit,
       event = as.integer(event),
       dropout=as.integer(droppedout)
     )
-    
+
     ##Now we are done filling in data that are newly enrolled, which is "out"
     ##Next we need to fill in data for the already enrolled in the interimData
-    
+
     ##the subjects that need to be filled in are those still being followed-up,
     ##i.e. followup=1, or exit=missing
-    
+
     #we need to generate a dropout time and a Time-to-Event
     #because exponetial distribution is memoryless, the times are generated with same weekly rates
     Nfollowup<-sum(is.na(interimData$exit))
@@ -166,25 +166,25 @@ FillinInterimdata.Pooled <-
     #followup time for subjects in follow-up
     adj.fUP <- tFU[interimData$followup==1]
     fuTime2 <- fuTime-adj.fUP
-      
+
     ####################################
-    #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up. 
+    #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up.
     ####################################
     ## similar process as before
     if ( !is.null(Seed) ) set.seed( Seed+2000 )
     dropout <- rexp(Nfollowup, rate=rates$dropRate)
     if ( !is.null(Seed) ) set.seed( Seed+3000 )
     event.time <- rexp(Nfollowup, rate=rates$eventRate)
-    
+
     ## fuTime needs to be adjusted to the amount of time the patients were already in the study
-    
+
     ## censor the dropout time and Time-to-Event based on fuTime
     dropout[dropout >= fuTime2] <- NA
     event.time[event.time >= fuTime2] <- NA
-    
+
     ## Censor events that occur after dropout, as they can't be observed
     event.time[ is.TRUE( event.time > dropout ) ] <- NA
-    
+
     ## create observed data object to fill in
     if(is.null(visitSchedule2)){    obsEDI <- data.frame( enrollTime = 0, #interimData$entry[is.na(interimData$exit)],
                                                           schedule2 = FALSE,
@@ -201,76 +201,76 @@ FillinInterimdata.Pooled <-
         )
       }
     }
-    
+
     ## get event diagnosis dates for each non-NA Time-to-Event
     event.time1<-event.time[obsEDI$schedule2==FALSE]
     event.time2<-event.time[obsEDI$schedule2==TRUE]
     dropout1<-dropout[obsEDI$schedule2==FALSE]
     dropout2<-dropout[obsEDI$schedule2==TRUE]
-    
+
     if ( !all( is.na(event.time1) ) )
     {
       eventDX1 <- getVisitWeek( week=event.time1, visitWeeks=visitSchedule, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime1 <- pmin( eventDX1, dropout1, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX1[ is.TRUE(eventDX1 > minTime1) ] <- NA
       dropout1[ is.TRUE(dropout1 > minTime1) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime[obsEDI$schedule2==FALSE] <- eventDX1
       obsEDI$dropTime[obsEDI$schedule2==FALSE]  <- dropout1
     }
-    
+
     if ( !all( is.na(event.time2) ) )
     {
       eventDX2 <- getVisitWeek( week=event.time2, visitWeeks=visitSchedule2, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime2 <- pmin( eventDX2, dropout2, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX2[ is.TRUE(eventDX2 > minTime2) ] <- NA
       dropout2[ is.TRUE(dropout2 > minTime2) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime[obsEDI$schedule2==TRUE] <- eventDX2
       obsEDI$dropTime[obsEDI$schedule==TRUE]  <- dropout2
     }
-    
+
     obsEDI$futime <- pmin( obsEDI$eventDXTime,
                            obsEDI$dropTime, fuTime2, na.rm=TRUE)
-    
+
     exit  <- obsEDI$enrollTime + obsEDI$futime
-    
+
     ## create flag for event
     event <- !is.na(obsEDI$eventDXTime)
     droppedout<- !is.na(obsEDI$dropTime)
-    
-    
+
+
     interimData.filled <- data.frame(
       entry = interimData$entry,
       exit  = interimData$exit,
       event = as.integer(interimData$event),
       dropout=as.integer(interimData$dropout)
     )
-    
+
     ####################################
     #Change exit from reference time being the end of observed follow-up time to each subject in follow-up back to orignial timeline.
     ####################################
     #interimData.filled$exit[is.na(interimData$exit)]<-exit
     interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
-    
+
     #sanity check
     summary(interimData.filled$exit[is.na(interimData$exit)]-interimData.filled$entry[is.na(interimData$exit)])
-    
+
     interimData.filled$event[is.na(interimData$exit)]<-event
     interimData.filled$dropout[is.na(interimData$exit)]<-droppedout
-    
+
     return(rbind(interimData.filled,out))
   }
 
@@ -284,11 +284,11 @@ FillinInterimdata.byArm <-
     for(j in 1:nArms){
       Nenroll<-c(Nenroll,N[j]-sum(interimData$arm==trtNames[j]) )
     }
-    
+
     #Keep recruiting week by week untill Nenroll participants have been recruited, do this for each arm
     enr<-NULL
     arm<-NULL
-    
+
     for(j in 1:nArms){
       ii<-0
       Nenrolled<-0
@@ -301,17 +301,17 @@ FillinInterimdata.byArm <-
         Nenrolled<-Nenrolled+N.thisweek
         if ( Nenrolled >= Nenroll[j] ) break
       }
-      
+
       #restrict to the first nEnroll enrollees
       Nenroll2 <-sum(Nenroll[1:j])
       enr<-enr[1:Nenroll2]
       arm<-arm[1:Nenroll2]
     }
-    
+
     ## generate dropout times for the Nenroll participants from an exponential distribution
     if ( !is.null(Seed) ) set.seed( Seed )
     dropout <- rexp(length(enr), rates$dropRate)
-    
+
     ## generate Time-to-Event by treatment arm
     #here we can't use the same Seed as dropout because when rates$dropRate<rates$eventRate,
     #the same seed will always generate dropout>event.
@@ -320,8 +320,8 @@ FillinInterimdata.byArm <-
       if ( !is.null(Seed) ) set.seed( Seed+1000*j )
       event.time<-c(event.time,  rexp(Nenroll[j], rates$eventRate[j]))
     }
-    
-    
+
+
     ## censor the dropout time and Time-to-Event based on fuTime
     ##-----------------------------------------------------------
     ## we let the support of dropout being [0, fuTime)
@@ -331,65 +331,65 @@ FillinInterimdata.byArm <-
     ##----------------------------------------------------------
     dropout[dropout >= fuTime] <- NA
     event.time[event.time >= fuTime] <- NA
-    
+
     ## Censor events that occur after dropout, as they can't be observed
     event.time[ is.TRUE( event.time > dropout ) ] <- NA
-    
-    
+
+
     ## *** NOTE  ****************************************************
     ##  We still have records with both dropout time and Time-to-Event for those with dropout > event
     ##  We need to keep both times until we calculate the "DX time" for the evnets,
     ##  then we can compare dropout to the DX time and keep the earlier of the two.
     ## **************************************************************
-    
-    
+
+
     ## ---------------------------------------------------------------------- ##
     ## Now, we start to construct the "observed" data, by applying the        ##
     ## study visit Map (Schedule 1 and Schedule 4) to the simulated data.     ##
     ## This will allow us to figure out when: (a) the event are diagnosed##
     ## (b) the last visit occurred (during the simulated period).             ##
     ## ---------------------------------------------------------------------- ##
-    
+
     ## create observed data object to fill in
     obsEDI <- data.frame( arm = arm,
                           enrollTime = enr,
                           dropTime = dropout,
                           eventDXTime = NA
     )
-    
+
     ## get event diagnosis dates for each non-NA event time
-    
+
     ## Do the following only if there's at least one event
     if ( !all( is.na(event.time) ) )
     {
       #for simulated newly enrolled subjects, everyone is in visitShcedule1
       eventDX <- getVisitWeek( week=event.time, visitWeeks=visitSchedule, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime <- pmin( eventDX, dropout, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX[ is.TRUE(eventDX > minTime) ] <- NA
       dropout[ is.TRUE(dropout > minTime) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime <- eventDX
       obsEDI$dropTime <- dropout
     }
-    
+
     ## we compute the amount of "follow-up time"  for each
     ## ppt.  This is equal to the 'fuTime' for ppt.s without events,
     ## and equal to the event time for participants with events.
     obsEDI$futime <- pmin( obsEDI$eventDXTime,
                            obsEDI$dropTime, fuTime, na.rm=TRUE)
-    
+
     exit  <- obsEDI$enrollTime + obsEDI$futime
-    
+
     ## create flag for event
     event <- !is.na(obsEDI$eventDXTime)
     droppedout<- !is.na(obsEDI$dropTime)
-    
+
     out <- data.frame(
       arm = arm,
       entry = enr,
@@ -397,13 +397,13 @@ FillinInterimdata.byArm <-
       event = as.integer(event),
       dropout=as.integer(droppedout)
     )
-    
+
     ##Now we are done filling in data that are newly enrolled, which is "out"
     ##Next we need to fill in data for the already enrolled in the interimData
-    
+
     ##the subjects that need to be filled in are those still being followed-up,
     ##i.e. followup=1, or exit=missing
-    
+
     #we need to generate a dropout time and a Time-to-Event
     #because exponetial distribution is memoryless, the times are generated with same weekly rates
     arm<-interimData$arm[is.na(interimData$exit)]
@@ -411,34 +411,34 @@ FillinInterimdata.byArm <-
     for(j in 1:nArms){
       Nfollowup<-c(Nfollowup,sum(is.na(interimData$exit[interimData$arm==trtNames[j]])))
     }
-    
+
     tFU<-ifelse(interimData$followup==1,interimData$last_visit_dt-interimData$entry,interimData$exit-interimData$entry)
     #followup time for subjects in follow-up
     adj.fUP <- tFU[interimData$followup==1]
     fuTime2 <- fuTime-adj.fUP
-    
+
     ####################################
-    #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up. 
-    ####################################    
+    #Starting here, we changed reference time (time=0) to the end of observed follow-up time to each subject in follow-up.
+    ####################################
     ## similar process as before
     if ( !is.null(Seed) ) set.seed( Seed+4000 )
     dropout <- rexp(sum(Nfollowup), rate=rates$dropRate)
-    
+
     event.time <- rep(NA, sum(Nfollowup))
     for(j in 1:nArms){
       if ( !is.null(Seed) ) set.seed( Seed+4000+1000*j )
       event.time[arm==trtNames[j]] <- rexp(Nfollowup[j], rates$eventRate[j] )
     }
-    
+
     ## fuTime needs to be adjusted to the amount of time the patients were already in the study
-    
+
     ## censor the dropout time and Time-to-Event based on fuTime
     dropout[dropout >= fuTime2] <- NA
     event.time[event.time >= fuTime2] <- NA
-    
+
     ## Censor events that occur after dropout, as they can't be observed
     event.time[ is.TRUE( event.time > dropout ) ] <- NA
-    
+
     ## create observed data object to fill in
     if(is.null(visitSchedule2)){     obsEDI <- data.frame( arm = arm,
                                                            enrollTime = 0, #interimData$entry[is.na(interimData$exit)],
@@ -457,58 +457,58 @@ FillinInterimdata.byArm <-
         )
       }
     }
-    
-    
+
+
     ## get event diagnosis dates for each non-NA Time-to-Event
     event.time1<-event.time[obsEDI$schedule2==FALSE]
     event.time2<-event.time[obsEDI$schedule2==TRUE]
     dropout1<-dropout[obsEDI$schedule2==FALSE]
     dropout2<-dropout[obsEDI$schedule2==TRUE]
-    
+
     if ( !all( is.na(event.time1) ) )
     {
       eventDX1 <- getVisitWeek( week=event.time1, visitWeeks=visitSchedule, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime1 <- pmin( eventDX1, dropout1, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX1[ is.TRUE(eventDX1 > minTime1) ] <- NA
       dropout1[ is.TRUE(dropout1 > minTime1) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime[obsEDI$schedule2==FALSE] <- eventDX1
       obsEDI$dropTime[obsEDI$schedule2==FALSE]  <- dropout1
     }
-    
+
     if ( !all( is.na(event.time2) ) )
     {
       eventDX2 <- getVisitWeek( week=event.time2, visitWeeks=visitSchedule2, whichVisit = "next")
-      
+
       ## Compute the minimum of the eventDX time, dropout time
       ## Any events occurring *strictly* after this time are censored
       minTime2 <- pmin( eventDX2, dropout2, na.rm=TRUE)
-      
+
       ## censor eventDX and dropout times
       eventDX2[ is.TRUE(eventDX2 > minTime2) ] <- NA
       dropout2[ is.TRUE(dropout2 > minTime2) ] <- NA
-      
+
       ## store info in obsEDI
       obsEDI$eventDXTime[obsEDI$schedule2==TRUE] <- eventDX2
       obsEDI$dropTime[obsEDI$schedule2==TRUE]  <- dropout2
     }
-    
+
     obsEDI$futime <- pmin( obsEDI$eventDXTime,
                            obsEDI$dropTime, fuTime2, na.rm=TRUE)
-    
+
     exit  <- obsEDI$enrollTime + obsEDI$futime
-    
+
     ## create flag for event
     event <- !is.na(obsEDI$eventDXTime)
     droppedout<- !is.na(obsEDI$dropTime)
-    
-    
+
+
     interimData.filled <- data.frame(
       arm = interimData$arm,
       entry = interimData$entry,
@@ -516,26 +516,26 @@ FillinInterimdata.byArm <-
       event = as.integer(interimData$event),
       dropout=as.integer(interimData$dropout)
     )
-    
+
     ####################################
     #Change exit from reference time being the end of observed follow-up time to each subject in follow-up back to orignial timeline.
     ####################################
     #interimData.filled$exit[is.na(interimData$exit)]<-exit
     interimData.filled$exit[is.na(interimData$exit)]<-interimData.filled$entry[is.na(interimData$exit)]+adj.fUP+exit
-    
+
     #sanity check
     summary(interimData.filled$exit[is.na(interimData$exit)]-interimData.filled$entry[is.na(interimData$exit)])
-    
+
     interimData.filled$event[is.na(interimData$exit)]<-event
     interimData.filled$dropout[is.na(interimData$exit)]<-droppedout
-    
+
     return(rbind(interimData.filled,out))
   }
 
 #' Treatment Arm-Pooled Simulation-Based Completion of a Randomized Efficacy Trial with a Time-to-Event Endpoint and Fixed Follow-up Using an Interim Data-set
 #'
 #' Considers data collected through an interim timepoint and generates independent time-to-event data-sets, ignoring treatment assignments, to assess the distribution of the number of treatment arm-pooled endpoints
-#' at the end of the follow-up period. A Bayesian model for the treatment arm-pooled endpoint rate is used for generating future data (see the vignette).
+#' at the end of the follow-up period. A Bayesian model for the treatment arm-pooled endpoint rate, offering the option to specify a robust mixture prior distribution, is used for generating future data (see the vignette).
 #'
 #' @param interimData a data frame capturing observed data at an interim timepoint that contains one row per enrolled participant and the following variables: \code{arm} (treatment arm), \code{schedule2} (an indicator that a participant follows the \code{visitSchedule2} schedule, e.g., participants who discontinue study product administration may remain in primary follow-up on a different schedule), \code{entry} (number of weeks since the reference date until the enrollment date), \code{exit} (number of weeks since the reference date until the trial exit date defined as the date of either infection diagnosis, dropout, or primary follow-up completion, whichever occurs first; \code{NA} for participants still in primary follow-up), \code{last_visit_dt} (number of weeks since the reference date until the last visit date), \code{event} (event indicator), \code{dropout} (dropout indicator), \code{complete} (indicator of completed follow-up), \code{followup} (indicator of being in primary follow-up). The reference date is defined as the enrollment date of the first participant. The variables \code{entry}, \code{exit}, and \code{last_visit_dt} use week as the unit of time. Month is defined as 52/12 weeks.
 #' @param nTrials the number of trials to be simulated
@@ -549,7 +549,7 @@ FillinInterimdata.byArm <-
 #' @param fixedDropOutRate the pre-trial assumed annual dropout rate. If \code{NULL} (default), then the observed treatment arm-pooled dropout rate is used.
 #' @param mixture a logical value indicating whether to use the robust mixture approach (see the vignette). If equal to \code{FALSE} (default), then \code{mix.weights} and \code{eventPriorWeightRobust} are ignored.
 #' @param mix.weights a numeric vector of length 2 representing prior weights (values in \eqn{[0,1]}) of the informative and the weakly informative component, respectively, of the prior gamma-mixture distribution of the treatment arm-pooled event rate. The two weights must sum up to 1. If \code{NULL} (default) and \code{mixture=TRUE}, then \code{c(0.8,0.2)} is used.
-#' @param eventPriorWeightRobust a numeric value representing the weight \eqn{w} used to calculate the \eqn{\beta} parameter of the weakly informative gamma distribution in the mixture prior. If \code{NULL} (default), \eqn{1/200} is used.
+#' @param eventPriorWeightRobust a numeric value representing the weight \eqn{w} used to calculate the \eqn{\beta} parameter of the weakly informative gamma distribution in the mixture prior. If \code{NULL} (default) and \code{mixture=TRUE}, then \eqn{1/200} is used.
 #' @param visitSchedule a numeric vector of visit weeks at which testing for the endpoint is conducted
 #' @param visitSchedule2 a numeric vector of visit weeks at which testing for the endpoint is conducted in a subset of participants (e.g., those who discontinue administration of the study product but remain in follow-up). If \code{NULL} (default), everyone is assumed to follow \code{visitSchedule}.
 #' @param saveFile a character string specifying an \code{.RData} file storing the output list. If \code{NULL} and \code{saveDir} is specified, the file name will be generated. If, in turn, \code{saveFile} is specified but \code{saveDir} equals \code{NULL}, then \code{saveFile} is ignored, and the output list will be returned.
@@ -570,7 +570,7 @@ FillinInterimdata.byArm <-
 #' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean event rate
 #' \item \code{TkOverTstar}: the ratio of the observed person-time at risk to the estimated total person-time at risk, with the event rate set equal to \code{eventPriorRate} in the estimator for the total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
-#' \item \code{w.post}: the weights, summing up to 1, of the gamma components of the posterior mixture distribution of the treatment arm-pooled event rate. if \code{mixture=FALSE}, then \code{w.post=NA}.
+#' \item \code{w.post}: the weights, summing up to 1, of the gamma components of the posterior mixture distribution of the treatment arm-pooled event rate. If \code{mixture=FALSE}, then \code{w.post=NA}.
 #' }
 #'
 #' @examples
@@ -639,8 +639,8 @@ completeTrial.pooledArms <-
 
     # this is a dummy variable to call the robust mixture approach
     mixture=FALSE,
-   
-    # this is a vector of lenght 2 to indicate the weights of the 
+
+    # this is a vector of lenght 2 to indicate the weights of the
     # informative part and of the uniformative part (default is 0.80/0.20).
     # the elements should sum to 1.
     mix.weights=NULL,
@@ -707,29 +707,29 @@ completeTrial.pooledArms <-
 
     ## if mixture==TRUE then alpha and beta should become vectors
     ## furthermore the weights need to be updated as well.
-    
+
     if(mixture){
         if(is.null(eventPriorWeightRobust)){
             warning("'eventPriorWeightRobust' unspecified and thus set to 1/200.")
             eventPriorWeight <- c(eventPriorWeight, 1/200)
         }else{
-         eventPriorWeight <- c(eventPriorWeight,eventPriorWeightRobust) 
+         eventPriorWeight <- c(eventPriorWeight,eventPriorWeightRobust)
         }
-    }        
-        
+    }
+
     ## if mixture=FALSE than these remain scalars
-    ## because the two gamma have the same expected value, eventPriorRate can be used    
-    ## if 
+    ## because the two gamma have the same expected value, eventPriorRate can be used
+    ## if
     beta<-T_star*eventPriorWeight/(2*(1-eventPriorWeight))
     alpha<-beta*eventPriorRate
 
-    
+
     ## create lists for storage of trial data
     trialList  <- vector("list", nTrials)
 
     #record the weekly event rates
     eventPostRate    <- rep(NA,nTrials)
-    
+
     ## core of the mixture part
     if(mixture){
         # verify that two weights are specified
@@ -759,20 +759,20 @@ completeTrial.pooledArms <-
       #event rate=rgamma( 1,  alpha + n_Events,  beta + totFU_for_event)
       if(mixture){
            ## simple sampling from the mixture distribution
-          ## sample runif from 0-1; if smaller than max-weight -> sample from dist. 
+          ## sample runif from 0-1; if smaller than max-weight -> sample from dist.
           ## with max weight otherwise sample from the other distribution.
           tmp <- runif(1, min=0, max=1)
-          IDX <- which(w_post==max(w_post)) 
+          IDX <- which(w_post==max(w_post))
           if(tmp < max(w_post)) {
             eventRate <- rgamma(1, alpha[IDX]+n_k, beta[IDX]+T_k)
           }else{
-              #IDX <- which(w_post!=max(w_post)) 
+              #IDX <- which(w_post!=max(w_post))
             eventRate <- rgamma(1, alpha[-IDX]+n_k, beta[-IDX]+T_k)
           }
       }else{
           eventRate=rgamma( 1,  alpha + n_k,  beta+T_k)
       }
-  
+
       ## 'parSet' contains weekly rates
       rates <- list(enrollmentRate=enrollmentRate, eventRate=eventRate, dropRate=dropRate)
 
@@ -1246,7 +1246,7 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
     if(!is.null(widthloc)){if(j==widthloc) mylwd<-0.8}
     segments(x0=dat[[j]]$mu.TNI, y0=0, y1=1, col=colors[[j]], lwd=mylwd)
   }
-  
+
   tmp <- unique(tmp)
 
   # suppressWarnings() is used because if 'tmp' is of length 1, then diff() returns an empty vector, and 'min' issues a warning
@@ -1265,7 +1265,7 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
     axis(side=1, at= atValue[c(1,3)], labels=sort(tmp)[c(1,3)], tick=FALSE, line=-2, cex.axis=0.5)
     if (length(tmp)>=2){ axis(side=1, at= atValue[2], labels=sort(tmp)[2], tick=FALSE, line=-2, cex.axis=0.5) }
   }
-  
+
   for(i in 1:length(dat)){
     # ensure that the step function starts at the minimum of the x-axis range
     lines(c(min(x.label),dat[[i]]$TNI_rcdf$var),c(1,dat[[i]]$TNI_rcdf$RCDF), type="S",lty=1,col=colors[i],lwd=1.2)
@@ -1291,7 +1291,7 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
         axis(side=1, at=mytarget, labels=F,cex.axis=mycex)
         axis(side=1, at=mytarget + ifelse(mytarget-x.label[which.min(abs(mytarget-x.label))]>0, offset, -offset), labels=mytarget, tick=FALSE, line=-1.1, cex.axis=0.7)
       }
-      
+
       for(j in 1:length(dat)){
         if(length(unique(dat[[j]]$TNI_rcdf$RCDF[dat[[j]]$TNI_rcdf$var==mytarget]))==1){
           targetY<-c(targetY,unique(dat[[j]]$TNI_rcdf$RCDF[dat[[j]]$TNI_rcdf$var==mytarget]))
@@ -1304,7 +1304,7 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
           }
         }
       }
-      
+
       segments(x0=mytarget, y0=0, y1=1.2, col="gray60", lty="dotted", lwd=1.5)
       atValue <- rep(NA,3)
       for(j in 1:length(dat)){
@@ -1322,17 +1322,17 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
           }
         }
       }
-      
+
       idx <- which(!is.na(atValue))
       atValue <- atValue[idx]
       targetY <- targetY[idx]
-      
+
       idx <- which(as.numeric(format(100*targetY, digits=1, nsmall=1))==100)
       if (length(idx)>0){
         atValue <- atValue[-idx]
         targetY <- targetY[-idx]
       }
-      
+
       # if there are any additional tickmarks to plot
       if (length(atValue)>0){
         if( (max(targetY)-min(targetY)) > 0.05 | max(targetY)-min(targetY)==0){
@@ -1343,19 +1343,19 @@ plotRCDF.pooledArms <- function(eventTimeFrame=NULL, #the time frame to count ev
           if (length(atValue)==2){
             if (format(100*targetY[2], digits=1, nsmall=1) != format(100*targetY[1], digits=1, nsmall=1)){
               axis(side=2, at=atValue[1]-0.01, labels=format(100*targetY[1], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)
-              axis(side=2, at=atValue[2]+0.01, labels=format(100*targetY[2], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)    
+              axis(side=2, at=atValue[2]+0.01, labels=format(100*targetY[2], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)
             } else {
               axis(side=2, at=atValue[1], labels=format(100*targetY[1], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)
             }
           } else {
             axis(side=2, at=atValue[c(1,3)]+c(-0.01,0.01), labels=format(100*targetY[c(1,3)], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)
-            axis(side=2, at=atValue[2], labels=format(100*targetY[2], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)  
+            axis(side=2, at=atValue[2], labels=format(100*targetY[2], digits=1, nsmall=1), tick=FALSE, line=-0.4, cex.axis=0.5)
           }
         }
       }
     }
   }
-  
+
 
 
   if(is.null(xlab)){mtext("Total Number of Infections (n)", side=1, las=0, line=2, cex=mycex2)
@@ -1544,23 +1544,23 @@ plotRCDF.byArm<-function(arm,
   polygon(x=c(rep(min(x.label),2),rep(max(x.label),2)), y=c(0,-2,-2,0), border=NA, col="gray90")
   axis(side=1, at=min(x.label), #+0.01*(max(x.label)-min(x.label))
        labels="Mean:", tick=FALSE, line=-2, cex.axis=0.6, hadj=0)
-  
+
   tmp<-c(dat[[1]]$mu.TNI,dat[[2]]$mu.TNI,dat[[3]]$mu.TNI)
-  
+
   widthchange<-length(tmp)!=length(unique(tmp))
   widthloc<-NULL
   for(i in 2:length(tmp)){
     if(tmp[i] %in% tmp[1:i-1]) widthloc<-i
   }
-  
+
   for(j in 1:length(dat)){
     mylwd<-1.5
     if(!is.null(widthloc)){if(j==widthloc) mylwd<-0.7}
     segments(x0=dat[[j]]$mu.TNI, y0=0, y1=1, col=colors[[j]], lwd=mylwd)
   }
-  
+
   tmp <- unique(tmp)
-  
+
   if(min(diff(sort(tmp)))>=3 | max(tmp)-min(tmp)==0){
     axis(side=1, at=tmp, labels=tmp, tick=FALSE, line=-2, cex.axis=0.5)
   } else {
@@ -1568,26 +1568,26 @@ plotRCDF.byArm<-function(arm,
       # at least one of the differences is <3, i.e., 'idx' is not empty
       idx <- which(diff(sort(tmp))<3)
       if (length(idx)==1){
-        if (idx==1){ 
-          atValue <- sort(tmp) + c(-0.5,0,0) 
+        if (idx==1){
+          atValue <- sort(tmp) + c(-0.5,0,0)
         }
-        if (idx==2){ 
+        if (idx==2){
           atValue <- sort(tmp) + c(0,0,0.5)
         }
       } else {
         atValue <- sort(tmp) + c(-0.4,0,0.4)
       }
       for (k in 1:length(tmp)){
-        axis(side=1, at= atValue[k], labels=sort(tmp)[k], tick=FALSE, line=-2, cex.axis=0.5)  
+        axis(side=1, at= atValue[k], labels=sort(tmp)[k], tick=FALSE, line=-2, cex.axis=0.5)
       }
     } else {
       atValue <- sort(tmp) + c(-0.25,0.25)
       for (k in 1:length(tmp)){
-        axis(side=1, at= atValue[k], labels=sort(tmp)[k], tick=FALSE, line=-2, cex.axis=0.5)  
+        axis(side=1, at= atValue[k], labels=sort(tmp)[k], tick=FALSE, line=-2, cex.axis=0.5)
       }
     }
   }
-  
+
   for(i in 1:length(dat)){
     lines(c(min(x.label),dat[[i]]$TNI_rcdf$var),c(1,dat[[i]]$TNI_rcdf$RCDF), type="S",lty=1,col=colors[i],lwd=1.2)
     points(dat[[i]]$TNI_rcdf$var,dat[[i]]$TNI_rcdf$RCDF,lty=1, pch=pchar[i], col=colors[i], cex=ifelse(i==1,0.4,0.5))
