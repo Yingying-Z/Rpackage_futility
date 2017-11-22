@@ -546,9 +546,10 @@ FillinInterimdata.byArm <-
 #' @param eventPriorRate a numeric value of a treatment arm-pooled prior mean incidence rate for the endpoint, expressed as the number of events per person-year at risk. If \code{NULL} (default), then use the observed rate in \code{interimData}.
 #' @param missVaccProb a probability of being excluded from the per-protocol cohort. If \code{NULL} (default), no per-protocol indicator is generated; if specified, the indicator is sampled from the Bernoulli distribution with probability \code{missVaccProb}.
 #' @param fuTime a follow-up time (in weeks) of each participant
-#' @param MIXTURE a logical value indicating whether to call the robust mixture approach. If equal to \code{FALSE} (default), then \code{mix.weights} and \code{eventPriorWeightRobust} are ignored.
-#' @param mix.weights a vector of lenght 2 to indicate the weights of the informative part and of the uniformative part. The elements should sum to 1. If \code{NULL} (default), 0.80/0.20 is used.
-#' @param eventPriorWeightRobust a numeric value of the robust event prior weight. If \code{NULL} (default), 1/200 is used.
+#' @param fixedDropOutRate the pre-trial assumed annual dropout rate. If \code{NULL} (default), then the observed treatment arm-pooled dropout rate is used.
+#' @param mixture a logical value indicating whether to use the robust mixture approach (see the vignette). If equal to \code{FALSE} (default), then \code{mix.weights} and \code{eventPriorWeightRobust} are ignored.
+#' @param mix.weights a numeric vector of length 2 representing prior weights (values in \eqn{[0,1]}) of the informative and the weakly informative component, respectively, of the prior gamma-mixture distribution of the treatment arm-pooled event rate. The two weights must sum up to 1. If \code{NULL} (default) and \code{mixture=TRUE}, then \code{c(0.8,0.2)} is used.
+#' @param eventPriorWeightRobust a numeric value representing the weight \eqn{w} used to calculate the \eqn{\beta} parameter of the weakly informative gamma distribution in the mixture prior. If \code{NULL} (default), \eqn{1/200} is used.
 #' @param visitSchedule a numeric vector of visit weeks at which testing for the endpoint is conducted
 #' @param visitSchedule2 a numeric vector of visit weeks at which testing for the endpoint is conducted in a subset of participants (e.g., those who discontinue administration of the study product but remain in follow-up). If \code{NULL} (default), everyone is assumed to follow \code{visitSchedule}.
 #' @param saveFile a character string specifying an \code{.RData} file storing the output list. If \code{NULL} and \code{saveDir} is specified, the file name will be generated. If, in turn, \code{saveFile} is specified but \code{saveDir} equals \code{NULL}, then \code{saveFile} is ignored, and the output list will be returned.
@@ -563,13 +564,13 @@ FillinInterimdata.byArm <-
 #' \item \code{rates}: a list with three components:
 #' \itemize{
 #' \item \code{enrollRate}: the treatment arm-pooled \emph{weekly} enrollment rate
-#' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
-#' \item \code{eventPostRate}: a numeric vector of length \code{nTrials} of the sampled treatment arm-pooled posterior \emph{annual} event rates
+#' \item \code{dropRate}: \code{fixedDropOutRate}, or, if \code{NULL}, the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
+#' \item \code{eventPostRate}: a numeric vector of length \code{nTrials} of the treatment arm-pooled \emph{annual} event rates sampled from the posterior distribution
 #' }
 #' \item \code{BetaOverBetaPlusTk}: the weight placed on the prior mean event rate
 #' \item \code{TkOverTstar}: the ratio of the observed person-time at risk to the estimated total person-time at risk, with the event rate set equal to \code{eventPriorRate} in the estimator for the total person-time at risk
 #' \item \code{randomSeed}: seed of the random number generator for simulation reproducibility
-#' \item \code{w.post}: the mixture posterior weights. if \code{MIXTURE} equal to \code{FALSE}, then \code{w.post} equal to \code{NA}
+#' \item \code{w.post}: the weights, summing up to 1, of the gamma components of the posterior mixture distribution of the treatment arm-pooled event rate. if \code{mixture=FALSE}, then \code{w.post=NA}.
 #' }
 #'
 #' @examples
@@ -627,6 +628,9 @@ completeTrial.pooledArms <-
     # if eventPriorRate=NULL, then use observed event rate
     eventPriorRate = NULL,
 
+    # pre-trial assumptions on annual drop-out rate. If NULL, the observed drop-out rate is used.
+    fixedDropOutRate=NULL,
+
     #used to create "per-protocol" indicators
     #If specified, indicator for belonging to a per-protocol cohort is created
     missVaccProb = NULL,
@@ -634,7 +638,7 @@ completeTrial.pooledArms <-
     fuTime,
 
     # this is a dummy variable to call the robust mixture approach
-    MIXTURE=FALSE,
+    mixture=FALSE,
    
     # this is a vector of lenght 2 to indicate the weights of the 
     # informative part and of the uniformative part (default is 0.80/0.20).
@@ -695,22 +699,25 @@ completeTrial.pooledArms <-
 
     #Estimation of Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    d_star <- dropRate
+    if(!is.null(fixedDropOutRate)){
+      dropRate<-fixedDropOutRate/52
+    }
+    d_star<-dropRate
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
-    ## if MIXTURE==TRUE then alpha and beta should become vectors
+    ## if mixture==TRUE then alpha and beta should become vectors
     ## furthermore the weights need to be updated as well.
     
-    if(MIXTURE){
+    if(mixture){
         if(is.null(eventPriorWeightRobust)){
-            warning("robust prior set to w = 1/200")
+            warning("'eventPriorWeightRobust' unspecified and thus set to 1/200.")
             eventPriorWeight <- c(eventPriorWeight, 1/200)
         }else{
          eventPriorWeight <- c(eventPriorWeight,eventPriorWeightRobust) 
         }
     }        
         
-    ## if MIXTURE=FALSE than these remain scalars
+    ## if mixture=FALSE than these remain scalars
     ## because the two gamma have the same expected value, eventPriorRate can be used    
     ## if 
     beta<-T_star*eventPriorWeight/(2*(1-eventPriorWeight))
@@ -724,7 +731,7 @@ completeTrial.pooledArms <-
     eventPostRate    <- rep(NA,nTrials)
     
     ## core of the mixture part
-    if(MIXTURE){
+    if(mixture){
         # verify that two weights are specified
         if(is.null(mix.weights)) {
             # first element is assigned a weight of 0.8
@@ -750,7 +757,7 @@ completeTrial.pooledArms <-
       if ( !is.null(randomSeed) ) set.seed( randomSeed+i )
       #weekly event rate
       #event rate=rgamma( 1,  alpha + n_Events,  beta + totFU_for_event)
-      if(MIXTURE){
+      if(mixture){
            ## simple sampling from the mixture distribution
           ## sample runif from 0-1; if smaller than max-weight -> sample from dist. 
           ## with max weight otherwise sample from the other distribution.
@@ -799,7 +806,7 @@ completeTrial.pooledArms <-
       BetaOverBetaPlusTk = beta/(beta+T_k),
       TkOverTstar = T_k/T_star,
       randomSeed = randomSeed,
-       w.post=ifelse(MIXTURE, w_post, NA)
+      w.post=ifelse(mixture, w_post, NA)
     )
 
     # save trial output and information on used rates
@@ -831,6 +838,7 @@ completeTrial.pooledArms <-
 #' @param enrollRatePeriod the length (in weeks) of the time period preceding the time of the last enrolled participant in \code{interimData} that the average weekly enrollment rate will be based on and used for completing enrollment. If \code{NULL} (default), then \code{enrollRate} must be specified.
 #' @param eventPriorWeight a numeric value in \eqn{[0,1]} representing a weight assigned to the prior gamma distribution of the treatment arm-specific event rates at the time when 50\% of the estimated person-time at risk in each arm has been accumulated (see the vignette)
 #' @param eventPriorRate a numeric vector of treatment arm-specific prior mean incidence rates for the endpoint, expressed as numbers of events per person-year at risk, with the arms in the same order as in \code{trtNames}
+#' @param fixedDropOutRate the pre-trial assumed annual treatment arm-pooled dropout rate. If \code{NULL} (default), then the observed treatment arm-pooled dropout rate is used.
 #' @param missVaccProb a probability of being excluded from the per-protocol cohort. If \code{NULL} (default), no per-protocol indicator is generated; if specified, the indicator is sampled from the Bernoulli distribution with probability \code{missVaccProb}.
 #' @param fuTime a follow-up time (in weeks) of each participant
 #' @param visitSchedule a numeric vector of visit weeks at which testing for the endpoint is conducted
@@ -847,7 +855,7 @@ completeTrial.pooledArms <-
 #' \item \code{rates}: a list with three components:
 #' \itemize{
 #' \item \code{enrollRate}: the treatment arm-pooled \emph{weekly} enrollment rate
-#' \item \code{dropRate}: the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
+#' \item \code{dropRate}: \code{fixedDropOutRate}, or, if \code{NULL}, the average \emph{annual} treatment arm-pooled dropout rate in \code{interimData}
 #' \item \code{eventPostRate}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is a numeric vector of length \code{nTrials} of the sampled treatment arm-specific posterior \emph{annual} event rates
 #' }
 #' \item \code{BetaOverBetaPlusTk}: a list with \code{length(trtNames)} components (labeled by the levels of the \code{arm} variable in \code{interimData}) each of which is the arm-specific weight placed on the prior mean event rate
@@ -910,6 +918,9 @@ completeTrial.byArm <-
     # a vector for each treatment arm, same order as trtNames
     # eventPriorRate can not be null
     eventPriorRate ,
+
+    # pre-trial assumptions on annual drop-out rate. If NULL, the observed drop-out rate is used.
+    fixedDropOutRate=NULL,
 
     #used to create "per-protocol" indicators
     #If specified, indicator for belonging to a per-protocol cohort is created
@@ -976,8 +987,10 @@ completeTrial.byArm <-
 
     #Estimation of Arm Specific Total Person-Weeks at Risk (T_star)
     #pre-trial assumed dropout rate d_star=0.1 per person-year=0.1/52 per person-week
-    d_star=0.1/52
-
+    if(!is.null(fixedDropOutRate)){
+      dropRate<-fixedDropOutRate/52
+    }
+    d_star<-dropRate
     T_star<-N*(1-exp(-(d_star+eventPriorRate)*fuTime))/(d_star+eventPriorRate)
 
     beta<-T_star*eventPriorWeight/(2*(1-eventPriorWeight))
